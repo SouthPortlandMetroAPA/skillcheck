@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  SkillCheck — South Portland Metro APA · ask for a skill level review (v0.1)
+  SkillCheck — South Portland Metro APA · ask for a skill level review (v0.2)
   ─────────────────────────────────────────────────────────────────────────────
   Brief: tools/claude/briefs/2026-09-18-skillcheck.md  (T1)
   WHO   a signed-in member (magic link → durable device session, NickPick/CrewCall model).
@@ -205,7 +205,7 @@
   async function submit() {
     const err = $('err'); err.textContent = ''; $('submit').disabled = true;
     const r = await gas('sl_submit', { token: S.token, about_self: S.about === 'self', subject: S.subject.member_number, team_number: S.team.team_number, format: S.format, proposed_sl: +$('proposed').value, reasoning: $('why').value.trim(), seen_on: $('seen').value || null, opponent: $('opp').value.trim(), ack: S.acked, hp: $('hp').value, fill_ms: Date.now() - S.opened });
-    if (!r.ok) { if (/session/i.test(r.error || '')) return handleSessionErr(r.error); err.textContent = r.error || 'Something went wrong. Try again.'; sync(); return; }
+    if (!r.ok) { if (isAuthErr(r.error)) return handleSessionErr(r.error); err.textContent = r.error || 'Something went wrong. Try again.'; sync(); return; }
     app.innerHTML = '<div style="text-align:center;padding:16px 4px"><div style="font-size:2.4rem">🎯</div><h2 style="margin:6px 0">Got it.</h2><p class="lead">Your request is in. The league office will read it, keep it private, and check it against the record. You\'ll get an email either way.</p><button class="btn ghost" id="home">Done</button></div>';
     $('home').onclick = showHome;
   }
@@ -226,6 +226,8 @@
     document.addEventListener('click', e => { if (!e.target.closest('.cd-search')) cdClose(); }); input.focus(); }
 
   /* ── session ── */
+  /* only the auth sentences log you out — 'not on a team right now' etc. are ordinary errors (fresh-eyes finding, 2026-09-18) */
+  const isAuthErr = e => /session is no longer valid|sign in again|signed out/i.test(e || '');
   function handleSessionErr(msg) { try { localStorage.removeItem(SKEY); } catch (e) {} S.token = null; showLogin(msg || 'Your session expired. Sign in again.'); }
   $('logout').onclick = () => { gas('sl_logout', { token: S.token }); try { localStorage.removeItem(SKEY); } catch (e) {} S.token = null; S.firstName = ''; showLogin(); };
   function boot() {
