@@ -54,7 +54,7 @@
   .note-back{ position:fixed; inset:0; background:rgba(20,30,50,.55); z-index:200; display:flex; align-items:center; justify-content:center; padding:16px; }
   .note{ background:#fff; border-radius:18px; max-width:420px; width:100%; padding:20px 20px 18px; box-shadow:0 12px 40px rgba(0,0,0,.25); }
   .note h2{ margin:0 0 10px; font-size:1.15rem; }
-  .note p{ margin:0 0 10px; font-size:1rem; line-height:1.5; }
+  .note p{ margin:0 0 12px; font-size:17px; line-height:1.5; }   /* 17px: bigger reads faster at a glance (NN/g) */
   .note .btn{ margin-top:6px; }
   /* member picker — CueDrop .cd-* (house rule: never free-text a player) */
   .cd-search{ position:relative; }
@@ -135,10 +135,12 @@
   function showNote() {
     S.acked = false; S.opened = Date.now();
     const back = document.createElement('div'); back.className = 'note-back'; back.id = 'noteBack'; back.setAttribute('role', 'dialog'); back.setAttribute('aria-modal', 'true'); back.setAttribute('aria-labelledby', 'noteTitle');
+    /* R4 — glanceable (NN/g): three lines, each front-loaded with a bold lead that carries the meaning alone
+       ("first 2 words" + scannable skeleton), 17px body, one action. Rubric + sources in the brief. */
     back.innerHTML = '<div class="note"><h2 id="noteTitle">Before you start</h2>'
-      + '<p>Skill levels come from the scoresheets, and what you see at the table helps us get them right.</p>'
-      + '<p>Anyone can have a hot night. Tell us what you actually saw, not just the score.</p>'
-      + '<p>Every request is read by the league office, kept private, and checked against the record. You\'ll hear back either way.</p>'
+      + '<p><b>Hot nights happen.</b> Levels come from the scoresheets; your eyes at the table help us get them right.</p>'
+      + '<p><b>Tell us what you saw.</b> Shots, safeties, innings. Not just the score.</p>'
+      + '<p><b>We read every one.</b> Kept private, checked against the record, and you\'ll hear back either way.</p>'
       + '<button class="btn" id="gotit">Got it</button></div>';
     document.body.appendChild(back);
     $('gotit').onclick = () => { S.acked = true; back.remove(); S.about === 'self' ? showSelf() : showPick(); };
