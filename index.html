@@ -69,6 +69,9 @@
   .cd-picked button{ background:none; border:0; color:#b8001f; font-weight:700; cursor:pointer; font-size:.88rem; padding:6px; min-height:40px; }
   .spin{ display:inline-block; width:26px; height:26px; border:3px solid #e5e7eb; border-top-color:var(--spm-primary); border-radius:50%; animation:spin 1s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
+  .need{ margin:10px 0 0; font-size:.88rem; line-height:1.45; color:#7a5a00; background:#fff8e1; border:1px solid #f0e0a8; border-radius:10px; padding:8px 10px; }
+  .need b{ font-weight:800; }
+  .need:empty{ display:none; border:0; padding:0; margin:0; }
   #updateOverlay{ position:fixed; inset:0; background:rgba(255,255,255,.96); z-index:9999; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; text-align:center; padding:24px; }
   #updateOverlay.show{ display:flex; }
 </style>
@@ -179,9 +182,9 @@
       + '<div id="fmtWrap" hidden><label class="lbl">Which format?</label><div class="chips" id="fmts"></div></div>'
       + '<div id="slWrap" hidden><div class="spm-two"><div><label class="lbl" for="claimed">' + (me ? 'Your current skill level' : 'Their current skill level') + '</label><select id="claimed"></select></div>'
       + '<div><label class="lbl" for="proposed">' + (me ? 'The level you think is right' : 'The level you think they should be') + '</label><select id="proposed"></select></div></div>'
-      + '<label class="lbl" for="why">What did you see?</label><p class="sub">Shots they made, how they played safeties, innings, who they beat, how often you have watched them. Specifics are what make a review possible.</p><textarea id="why" maxlength="3000" placeholder="A few sentences."></textarea><div class="sub" id="whyCount">0 / 60 characters minimum</div>'
+      + '<label class="lbl" for="why">What did you see?</label><p class="sub">Shots they made, how they played safeties, innings, who they beat, how often you have watched them. Specifics are what make a review possible.</p><textarea id="why" maxlength="3000" placeholder="A few sentences."></textarea>'
       + '<label class="lbl" for="seen">When did you see it? <span style="font-weight:400">(optional)</span></label><div class="spm-two"><input type="date" id="seen"><input type="text" id="opp" maxlength="120" placeholder="Against whom? (optional)" aria-label="Against whom (optional)"></div>'
-      + '<input class="hp" type="text" name="website" id="hp" tabindex="-1" autocomplete="off" aria-hidden="true"><div class="err" id="err"></div><button class="btn" id="submit" disabled>Send my request</button><p class="fine">Kept private. The player is never told who asked.</p></div>'
+      + '<input class="hp" type="text" name="website" id="hp" tabindex="-1" autocomplete="off" aria-hidden="true"><div class="err" id="err"></div><div class="need" id="need" aria-live="polite"></div><button class="btn" id="submit" disabled>Send my request</button><p class="fine">Kept private. The player is never told who asked.</p></div>'
       + '<button class="btn ghost" id="back">Back</button>';
     $('back').onclick = showHome;
     $('seen').max = new Date().toISOString().slice(0, 10);
@@ -223,11 +226,21 @@
   function sync() {
     renderRail();
     const why = ($('why') && $('why').value.trim()) || '';
-    if ($('whyCount')) $('whyCount').textContent = why.length + ' / 60 characters minimum';
     const claimed = $('claimed') ? $('claimed').value : '', proposed = $('proposed') ? $('proposed').value : '';
     const same = claimed && proposed && claimed === proposed;
     if ($('err') && same) $('err').textContent = 'Pick a level different from the current one.'; else if ($('err') && /different from the current/.test($('err').textContent)) $('err').textContent = '';
-    $('submit').disabled = !(S.team && S.format && claimed && proposed && !same && why.length >= 60 && S.acked);
+    /* Name every unmet condition — six of them used to fail silently and the operator hit a dead button.
+       The narrative is required but NEVER measured (operator: "dont put a min char count", 2026-09-18). */
+    const me = S.about === 'self', missing = [];
+    if (!S.cluster) missing.push('pick a team');
+    else if (!S.format) missing.push('pick 8-Ball or 9-Ball');
+    if (!claimed) missing.push(me ? 'your current skill level' : 'their current skill level');
+    if (!proposed) missing.push('the level you think is right');
+    else if (same) missing.push('a level different from the current one');
+    if (!why.length) missing.push('tell us what you saw');
+    if (!S.acked) missing.push('tap Got it on the note');
+    if ($('need')) $('need').innerHTML = missing.length ? '<b>Still needed:</b> ' + missing.join(' &middot; ') : '';
+    $('submit').disabled = !(S.team && S.format && claimed && proposed && !same && why.length > 0 && S.acked);
   }
   async function submit() {
     const err = $('err'); err.textContent = ''; $('submit').disabled = true;
