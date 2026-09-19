@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  SkillCheck — South Portland Metro APA · ask for a skill level review (v0.3)
+  SkillCheck — South Portland Metro APA · ask for a skill level review (v0.4)
   ─────────────────────────────────────────────────────────────────────────────
   Brief: tools/claude/briefs/2026-09-18-skillcheck.md  (T1)
   WHO   a signed-in member (magic link → durable device session, NickPick/CrewCall model).
@@ -94,7 +94,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   /* GAS: text/plain body, never application/json (CORS preflight GAS cannot answer) */
   const gas = (action, extra) => fetch(GAS_URL, { method: 'POST', body: JSON.stringify(Object.assign({ action }, extra || {})) }).then(r => r.json()).catch(() => ({ ok: false, error: 'Network hiccup. Check your connection and try again.' }));
-  const S = { token: null, firstName: '', me: null, about: null, subject: null, team: null, format: null, proposed: null, acked: false, opened: Date.now() };
+  const S = { token: null, firstName: '', me: null, about: null, subject: null, cluster: null, team: null, format: null, proposed: null, acked: false, opened: Date.now() };
   const app = $('app');
   const RANGE = { '8': [2, 3, 4, 5, 6, 7], '9': [1, 2, 3, 4, 5, 6, 7, 8, 9] };
 
@@ -118,7 +118,7 @@
   }
   function showHome() {
     $('ctl').hidden = false; $('whoami').textContent = S.firstName ? 'Signed in as ' + S.firstName : 'Signed in';
-    S.about = null; S.subject = null; S.team = null; S.format = null; S.proposed = null;
+    S.about = null; S.subject = null; S.cluster = null; S.team = null; S.format = null; S.proposed = null;
     app.innerHTML = '<p class="lead">Who is this review about?</p>'
       + '<button class="btn" id="self">Myself</button><button class="btn ghost" id="other">Another player</button>'
       + '<div id="mine" class="card-list" style="margin-top:22px"></div>';
@@ -127,7 +127,7 @@
     gas('sl_my', { token: S.token }).then(r => {
       if (!r.ok || !r.requests || !r.requests.length) return;
       $('mine').innerHTML = '<span class="lbl">Your requests</span>' + r.requests.map(q => '<div class="row"><span class="tag' + (q.status === 'pending' ? '' : ' done') + '">' + esc(q.status === 'no_change' ? 'no change' : q.status) + '</span> '
-        + esc(q.about_self ? 'Yourself' : q.subject_name) + ' · ' + (q.format === '8' ? '8-Ball' : '9-Ball') + ' · ' + (q.current_sl ? 'SL' + q.current_sl : 'not rated') + ' → SL' + q.proposed_sl + ' · ' + new Date(q.created_at).toLocaleDateString()
+        + esc(q.about_self ? 'Yourself' : q.subject_name) + ' · ' + (q.format === '8' ? '8-Ball' : '9-Ball') + ' · ' + (q.claimed_current_sl ? 'SL' + q.claimed_current_sl + ' → ' : '') + 'SL' + q.proposed_sl + ' · ' + new Date(q.created_at).toLocaleDateString()
         + (q.decision_note ? '<div class="sub" style="margin:4px 0 0">' + esc(q.decision_note) + '</div>' : '') + '</div>').join('');
     });
   }
@@ -167,11 +167,12 @@
   }
   function showForm() {
     const me = S.about === 'self', p = S.subject;
-    const teams = p.teams;
+    /* one chip per TEAM (cluster = same name · night · shared roster; the server tags every number with its cluster), then the format */
+    const clusters = []; p.teams.forEach(t => { let c = clusters.find(x => x.id === (t.cluster_id || t.team_number)); if (!c) { c = { id: t.cluster_id || t.team_number, label: t.label || t.team_name, night: t.night || '', entries: [] }; clusters.push(c); } c.entries.push(t); });
     app.innerHTML = '<div class="rec"><div class="who"><b>' + esc(p.name) + '</b><span class="sub" style="margin:0">#' + esc(p.member_number) + ' · ' + esc(p.session_name || '') + '</span></div></div>'
-      + '<label class="lbl">Which team?</label><div class="chips" id="teams">' + teams.map((t, i) => '<button type="button" class="chip" data-i="' + i + '" aria-pressed="false">' + esc(t.team_name) + ' (' + esc(t.team_number) + ')</button>').join('') + '</div>'
+      + '<label class="lbl">Which team?</label><div class="chips" id="teams">' + clusters.map((c, i) => '<button type="button" class="chip" data-i="' + i + '" aria-pressed="false">' + esc(c.label) + (c.night ? ' <span class="sub" style="margin:0">· ' + esc(c.night.slice(0, 3)) + '</span>' : '') + '</button>').join('') + '</div>'
       + '<div id="fmtWrap" hidden><label class="lbl">Which format?</label><div class="chips" id="fmts"></div></div>'
-      + '<div id="slWrap" hidden><label class="lbl">' + (me ? 'Your level now' : 'Their level now') + '</label><div class="rec"><div class="sl" id="curSl">—</div><div class="who"><span class="sub" style="margin:0" id="curNote">From your APA record.</span></div></div>'
+      + '<div id="slWrap" hidden><label class="lbl" for="claimed">' + (me ? 'Your current skill level' : 'Their current skill level') + '</label><select id="claimed"></select>'
       + '<label class="lbl" for="proposed">' + (me ? 'The level you think is right' : 'The level you think they should be') + '</label><select id="proposed"></select>'
       + '<label class="lbl" for="why">What did you see?</label><p class="sub">Shots they made, how they played safeties, innings, who they beat, how often you have watched them. Specifics are what make a review possible.</p><textarea id="why" maxlength="3000" placeholder="A few sentences."></textarea><div class="sub" id="whyCount">0 / 60 characters minimum</div>'
       + '<label class="lbl" for="seen">When did you see it? <span style="font-weight:400">(optional)</span></label><input type="date" id="seen"><input type="text" id="opp" maxlength="120" placeholder="Against whom? (optional)" style="margin-top:8px">'
@@ -179,32 +180,37 @@
       + '<button class="btn ghost" id="back">Back</button>';
     $('back').onclick = showHome;
     $('seen').max = new Date().toISOString().slice(0, 10);
-    $('teams').querySelectorAll('.chip').forEach(b => b.onclick = () => { $('teams').querySelectorAll('.chip').forEach(o => o.setAttribute('aria-pressed', o === b ? 'true' : 'false')); S.team = teams[+b.dataset.i]; S.format = null; renderFormats(); });
-    if (teams.length === 1) $('teams').querySelector('.chip').click();
+    $('teams').querySelectorAll('.chip').forEach(b => b.onclick = () => { $('teams').querySelectorAll('.chip').forEach(o => o.setAttribute('aria-pressed', o === b ? 'true' : 'false')); S.cluster = clusters[+b.dataset.i]; S.team = null; S.format = null; renderFormats(); });
+    if (clusters.length === 1) $('teams').querySelector('.chip').click();
     $('why').addEventListener('input', sync);
     $('submit').onclick = submit;
   }
   function renderFormats() {
-    const balls = S.team.balls; $('fmtWrap').hidden = false;
+    /* the cluster's formats = the union of its numbers' balls (a Masters number plays both) */
+    const balls = [...new Set(S.cluster.entries.flatMap(t => t.balls))].sort(); $('fmtWrap').hidden = false;
     $('fmts').innerHTML = balls.map(b => '<button type="button" class="chip" data-b="' + b + '" aria-pressed="false">' + (b === '8' ? '8-Ball' : '9-Ball') + '</button>').join('');
-    $('fmts').querySelectorAll('.chip').forEach(c => c.onclick = () => { $('fmts').querySelectorAll('.chip').forEach(o => o.setAttribute('aria-pressed', o === c ? 'true' : 'false')); S.format = c.dataset.b; renderSl(); });
+    $('fmts').querySelectorAll('.chip').forEach(c => c.onclick = () => { $('fmts').querySelectorAll('.chip').forEach(o => o.setAttribute('aria-pressed', o === c ? 'true' : 'false')); S.format = c.dataset.b; S.team = S.cluster.entries.find(t => t.balls.includes(S.format)); renderSl(); });
     if (balls.length === 1) $('fmts').querySelector('.chip').click(); else { $('slWrap').hidden = true; sync(); }
   }
+  /* Levels are what the requester KNOWS, exactly like the Google Form — the record is never shown here (operator rule 2026-09-18). */
   function renderSl() {
-    const cur = S.format === '8' ? S.subject.sl_8ball : S.subject.sl_9ball;
-    $('slWrap').hidden = false; $('curSl').textContent = cur ? 'SL' + cur : '—';
-    $('curNote').textContent = cur ? (S.about === 'self' ? 'From your APA record.' : 'From their APA record.') : 'Not rated yet in this format (new players start at SL3 after their first match).';
-    $('proposed').innerHTML = '<option value="">Pick a level</option>' + RANGE[S.format].filter(n => n !== cur).map(n => '<option value="' + n + '">SL' + n + (cur ? (n > cur ? ' (higher)' : ' (lower)') : '') + '</option>').join('');
-    $('proposed').onchange = sync; sync();
+    $('slWrap').hidden = false;
+    const opts = RANGE[S.format].map(n => '<option value="' + n + '">SL' + n + '</option>').join('');
+    $('claimed').innerHTML = '<option value="">Pick a level</option>' + opts;
+    $('proposed').innerHTML = '<option value="">Pick a level</option>' + opts;
+    $('claimed').onchange = sync; $('proposed').onchange = sync; sync();
   }
   function sync() {
     const why = ($('why') && $('why').value.trim()) || '';
     if ($('whyCount')) $('whyCount').textContent = why.length + ' / 60 characters minimum';
-    $('submit').disabled = !(S.team && S.format && $('proposed').value && why.length >= 60 && S.acked);
+    const claimed = $('claimed') ? $('claimed').value : '', proposed = $('proposed') ? $('proposed').value : '';
+    const same = claimed && proposed && claimed === proposed;
+    if ($('err') && same) $('err').textContent = 'Pick a level different from the current one.'; else if ($('err') && /different from the current/.test($('err').textContent)) $('err').textContent = '';
+    $('submit').disabled = !(S.team && S.format && claimed && proposed && !same && why.length >= 60 && S.acked);
   }
   async function submit() {
     const err = $('err'); err.textContent = ''; $('submit').disabled = true;
-    const r = await gas('sl_submit', { token: S.token, about_self: S.about === 'self', subject: S.subject.member_number, team_number: S.team.team_number, format: S.format, proposed_sl: +$('proposed').value, reasoning: $('why').value.trim(), seen_on: $('seen').value || null, opponent: $('opp').value.trim(), ack: S.acked, hp: $('hp').value, fill_ms: Date.now() - S.opened });
+    const r = await gas('sl_submit', { token: S.token, about_self: S.about === 'self', subject: S.subject.member_number, team_number: S.team.team_number, format: S.format, claimed_current_sl: +$('claimed').value, proposed_sl: +$('proposed').value, reasoning: $('why').value.trim(), seen_on: $('seen').value || null, opponent: $('opp').value.trim(), ack: S.acked, hp: $('hp').value, fill_ms: Date.now() - S.opened });
     if (!r.ok) { if (isAuthErr(r.error)) return handleSessionErr(r.error); err.textContent = r.error || 'Something went wrong. Try again.'; sync(); return; }
     app.innerHTML = '<div style="text-align:center;padding:16px 4px"><div style="font-size:2.4rem">🎯</div><h2 style="margin:6px 0">Got it.</h2><p class="lead">Your request is in. The league office will read it, keep it private, and check it against the record. You\'ll get an email either way.</p><button class="btn ghost" id="home">Done</button></div>';
     $('home').onclick = showHome;
