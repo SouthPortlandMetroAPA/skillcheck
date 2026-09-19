@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  SkillCheck — South Portland Metro APA · ask for a skill level review (v0.2)
+  SkillCheck — South Portland Metro APA · ask for a skill level review (v0.3)
   ─────────────────────────────────────────────────────────────────────────────
   Brief: tools/claude/briefs/2026-09-18-skillcheck.md  (T1)
   WHO   a signed-in member (magic link → durable device session, NickPick/CrewCall model).
@@ -24,6 +24,7 @@
 <meta name="theme-color" content="#ea002a">
 <link rel="stylesheet" href="https://southportlandmetroapa.github.io/shared/spm-base.css">
 <script src="version.js"></script>
+<script src="https://southportlandmetroapa.github.io/shared/spm-auth.js"></script>
 <style>
   [hidden]{ display:none !important; }
   .spm-page{ max-width:560px; }
@@ -90,7 +91,6 @@
   const SB_URL = 'https://dqzbekoaysgaiqljueac.supabase.co';
   const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxemJla29heXNnYWlxbGp1ZWFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNzA5NzgsImV4cCI6MjA5MDc0Njk3OH0.cCdGxZ4zEFzU_r6lWSDeoNWG67Q4MSYCAtpds035dfU';
   const APP_NAME = 'SkillCheck';
-  const SKEY = 'skillcheck.session.v1';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   /* GAS: text/plain body, never application/json (CORS preflight GAS cannot answer) */
   const gas = (action, extra) => fetch(GAS_URL, { method: 'POST', body: JSON.stringify(Object.assign({ action }, extra || {})) }).then(r => r.json()).catch(() => ({ ok: false, error: 'Network hiccup. Check your connection and try again.' }));
@@ -227,19 +227,19 @@
 
   /* ── session ── */
   /* only the auth sentences log you out — 'not on a team right now' etc. are ordinary errors (fresh-eyes finding, 2026-09-18) */
-  const isAuthErr = e => /session is no longer valid|sign in again|signed out/i.test(e || '');
-  function handleSessionErr(msg) { try { localStorage.removeItem(SKEY); } catch (e) {} S.token = null; showLogin(msg || 'Your session expired. Sign in again.'); }
-  $('logout').onclick = () => { gas('sl_logout', { token: S.token }); try { localStorage.removeItem(SKEY); } catch (e) {} S.token = null; S.firstName = ''; showLogin(); };
+  const isAuthErr = e => spmAuth.isAuthErr(e);
+  function handleSessionErr(msg) { spmAuth.clear(); S.token = null; showLogin(msg || 'Your session expired. Sign in again.'); }
+  $('logout').onclick = () => { spmAuth.logout(S.token); S.token = null; S.firstName = ''; showLogin(); };
   function boot() {
     const urlToken = new URLSearchParams(location.search).get('token');
-    let stored = null; try { stored = localStorage.getItem(SKEY); } catch (e) {}
+    const stored = spmAuth.get();
     const tok = urlToken || stored;
     if (urlToken) history.replaceState(null, '', location.pathname);
     if (!tok) { showLogin(); return; }
     app.innerHTML = '<div style="padding:20px;text-align:center"><span class="spin"></span><p class="sub" style="margin-top:12px">Signing you in…</p></div>';
     gas('sl_verify', { token: tok }).then(r => {
-      if (!r.ok) { try { localStorage.removeItem(SKEY); } catch (e) {} showLogin(urlToken ? (r.error || 'That link did not work. Request a fresh one.') : ''); return; }
-      S.token = tok; S.firstName = r.first_name || ''; try { localStorage.setItem(SKEY, tok); } catch (e) {}
+      if (!r.ok) { if (!urlToken || spmAuth.isAuthErr(r.error)) spmAuth.clear(); showLogin(urlToken ? (r.error || 'That link did not work. Request a fresh one.') : ''); return; }
+      S.token = tok; S.firstName = r.first_name || ''; spmAuth.set(tok);
       showHome();
     });
   }
@@ -253,6 +253,7 @@
   }
   function pollForDeploy() { const t = setInterval(async () => { try { const r = await fetch('version.js?_=' + Date.now(), { cache: 'no-store' }); const m = (await r.text()).match(/APP_VERSION\s*=\s*'([^']+)'/); if (m && cmpVer(m[1], window.APP_VERSION) > 0) { clearInterval(t); location.reload(); } } catch (e) {} }, 15000); }
   setInterval(checkVersion, 30000);
+  spmAuth.onChange(function(t){ if((t||'')!==(S.token||'')) location.reload(); });   /* SSO: another app signed in/out */
   boot();
 </script>
 </body>
