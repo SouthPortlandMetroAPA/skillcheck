@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  SkillCheck — South Portland Metro APA · ask for a skill level review (v0.4)
+  SkillCheck — South Portland Metro APA · ask for a skill level review (v0.5)
   ─────────────────────────────────────────────────────────────────────────────
   Brief: tools/claude/briefs/2026-09-18-skillcheck.md  (T1)
   WHO   a signed-in member (magic link → durable device session, NickPick/CrewCall model).
@@ -22,6 +22,7 @@
 <meta name="robots" content="noindex">
 <title>SkillCheck — South Portland Metro APA</title>
 <meta name="theme-color" content="#ea002a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8E%AF%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://southportlandmetroapa.github.io/shared/spm-base.css">
 <script src="version.js"></script>
 <script src="https://southportlandmetroapa.github.io/shared/spm-auth.js"></script>
@@ -74,15 +75,18 @@
 </head>
 <body>
   <div id="updateOverlay"><div class="spin"></div><div><b>Updating…</b><br>Grabbing the latest version.</div></div>
-  <div class="spm-page">
+  <div class="spm-page spm-wide">
     <header class="spm-header">
       <h1>SkillCheck 🎯</h1>
       <p class="spm-subtitle">South Portland Metro APA · skill level review</p>
     </header>
-    <main class="spm-card">
-      <div class="ctl" id="ctl" hidden><span id="whoami" class="sub" style="margin:0"></span><button type="button" id="logout">Log out</button></div>
-      <div id="app"></div>
-    </main>
+    <div class="spm-shell">
+      <main class="spm-card">
+        <div class="ctl" id="ctl" hidden><span id="whoami" class="sub" style="margin:0"></span><button type="button" id="logout">Log out</button></div>
+        <div id="app"></div>
+      </main>
+      <aside class="spm-rail" id="rail" aria-live="polite"></aside>
+    </div>
   </div>
 
 <script>
@@ -118,12 +122,12 @@
   }
   function showHome() {
     $('ctl').hidden = false; $('whoami').textContent = S.firstName ? 'Signed in as ' + S.firstName : 'Signed in';
-    S.about = null; S.subject = null; S.cluster = null; S.team = null; S.format = null; S.proposed = null;
+    S.about = null; S.subject = null; S.cluster = null; S.team = null; S.format = null; S.proposed = null; renderRail();
     app.innerHTML = '<p class="lead">Who is this review about?</p>'
       + '<button class="btn" id="self">Myself</button><button class="btn ghost" id="other">Another player</button>'
       + '<div id="mine" class="card-list" style="margin-top:22px"></div>';
-    $('self').onclick = () => { S.about = 'self'; showNote(); };
-    $('other').onclick = () => { S.about = 'other'; showNote(); };
+    $('self').onclick = () => { S.about = 'self'; renderRail(); showNote(); };
+    $('other').onclick = () => { S.about = 'other'; renderRail(); showNote(); };
     gas('sl_my', { token: S.token }).then(r => {
       if (!r.ok || !r.requests || !r.requests.length) return;
       $('mine').innerHTML = '<span class="lbl">Your requests</span>' + r.requests.map(q => '<div class="row"><span class="tag' + (q.status === 'pending' ? '' : ' done') + '">' + esc(q.status === 'no_change' ? 'no change' : q.status) + '</span> '
@@ -162,7 +166,7 @@
     cdWire(async p => {
       $('err').textContent = ''; const r = await gas('sl_player', { token: S.token, member: p.member_number });
       if (!r.ok) { $('err').textContent = r.error || 'Could not load that player.'; cdClear(); return; }
-      S.subject = r.player; showForm();
+      S.subject = r.player; renderRail(); showForm();
     });
   }
   function showForm() {
@@ -172,15 +176,16 @@
     app.innerHTML = '<div class="rec"><div class="who"><b>' + esc(p.name) + '</b><span class="sub" style="margin:0">#' + esc(p.member_number) + ' · ' + esc(p.session_name || '') + '</span></div></div>'
       + '<label class="lbl">Which team?</label><div class="chips" id="teams">' + clusters.map((c, i) => '<button type="button" class="chip" data-i="' + i + '" aria-pressed="false">' + esc(c.label) + (c.night ? ' <span class="sub" style="margin:0">· ' + esc(c.night.slice(0, 3)) + '</span>' : '') + '</button>').join('') + '</div>'
       + '<div id="fmtWrap" hidden><label class="lbl">Which format?</label><div class="chips" id="fmts"></div></div>'
-      + '<div id="slWrap" hidden><label class="lbl" for="claimed">' + (me ? 'Your current skill level' : 'Their current skill level') + '</label><select id="claimed"></select>'
-      + '<label class="lbl" for="proposed">' + (me ? 'The level you think is right' : 'The level you think they should be') + '</label><select id="proposed"></select>'
+      + '<div id="slWrap" hidden><div class="spm-two"><div><label class="lbl" for="claimed">' + (me ? 'Your current skill level' : 'Their current skill level') + '</label><select id="claimed"></select></div>'
+      + '<div><label class="lbl" for="proposed">' + (me ? 'The level you think is right' : 'The level you think they should be') + '</label><select id="proposed"></select></div></div>'
       + '<label class="lbl" for="why">What did you see?</label><p class="sub">Shots they made, how they played safeties, innings, who they beat, how often you have watched them. Specifics are what make a review possible.</p><textarea id="why" maxlength="3000" placeholder="A few sentences."></textarea><div class="sub" id="whyCount">0 / 60 characters minimum</div>'
-      + '<label class="lbl" for="seen">When did you see it? <span style="font-weight:400">(optional)</span></label><input type="date" id="seen"><input type="text" id="opp" maxlength="120" placeholder="Against whom? (optional)" style="margin-top:8px">'
+      + '<label class="lbl" for="seen">When did you see it? <span style="font-weight:400">(optional)</span></label><div class="spm-two"><input type="date" id="seen"><input type="text" id="opp" maxlength="120" placeholder="Against whom? (optional)" aria-label="Against whom (optional)"></div>'
       + '<input class="hp" type="text" name="website" id="hp" tabindex="-1" autocomplete="off" aria-hidden="true"><div class="err" id="err"></div><button class="btn" id="submit" disabled>Send my request</button><p class="fine">Kept private. The player is never told who asked.</p></div>'
       + '<button class="btn ghost" id="back">Back</button>';
     $('back').onclick = showHome;
     $('seen').max = new Date().toISOString().slice(0, 10);
-    $('teams').querySelectorAll('.chip').forEach(b => b.onclick = () => { $('teams').querySelectorAll('.chip').forEach(o => o.setAttribute('aria-pressed', o === b ? 'true' : 'false')); S.cluster = clusters[+b.dataset.i]; S.team = null; S.format = null; renderFormats(); });
+    $('teams').querySelectorAll('.chip').forEach(b => b.onclick = () => { $('teams').querySelectorAll('.chip').forEach(o => o.setAttribute('aria-pressed', o === b ? 'true' : 'false')); S.cluster = clusters[+b.dataset.i]; S.team = null; S.format = null; renderFormats(); renderRail(); });
+    renderRail();
     if (clusters.length === 1) $('teams').querySelector('.chip').click();
     $('why').addEventListener('input', sync);
     $('submit').onclick = submit;
@@ -200,7 +205,22 @@
     $('proposed').innerHTML = '<option value="">Pick a level</option>' + opts;
     $('claimed').onchange = sync; $('proposed').onchange = sync; sync();
   }
+  /* Desktop rail — a live mirror of the choices (spm-base .spm-rail; display:none below 1200px). */
+  function renderRail() {
+    const rail = $('rail'); if (!rail) return;
+    if (!S.token || !S.about) { rail.innerHTML = ''; return; }
+    const row = (k, v) => '<dt>' + k + '</dt><dd' + (v ? '>' + v : ' class="spm-rail-empty">not yet') + '</dd>';
+    const fmt = S.format ? (S.format === '8' ? '8-Ball' : '9-Ball') : '';
+    const claimed = $('claimed') && $('claimed').value, proposed = $('proposed') && $('proposed').value;
+    rail.innerHTML = '<div class="spm-rail-card"><h3>Your request so far</h3><dl>'
+      + row('About', S.about === 'self' ? 'Yourself' : (S.subject ? esc(S.subject.name) : ''))
+      + row('Team', S.cluster ? esc(S.cluster.label) + (S.cluster.night ? ' · ' + esc(S.cluster.night) : '') : '')
+      + row('Format', fmt)
+      + row('Levels', claimed && proposed ? 'SL' + esc(claimed) + ' → SL' + esc(proposed) : (claimed ? 'now SL' + esc(claimed) : ''))
+      + '</dl><p class="spm-rail-note"><b>Tell us what you saw.</b> Shots, safeties, innings — not just the score. Kept private; you\'ll hear back either way.</p></div>';
+  }
   function sync() {
+    renderRail();
     const why = ($('why') && $('why').value.trim()) || '';
     if ($('whyCount')) $('whyCount').textContent = why.length + ' / 60 characters minimum';
     const claimed = $('claimed') ? $('claimed').value : '', proposed = $('proposed') ? $('proposed').value : '';
@@ -220,7 +240,7 @@
   let _cdAc = [], _cdTimer = null, _cdFocus = -1, _cdOnPick = null;
   const cdName = p => ([p.first_name, p.last_name].filter(Boolean).join(' ').trim() || '(no name)') + (p.nickname && p.nickname !== p.first_name ? ' “' + p.nickname + '”' : '');
   const cdClose = () => $('cdAc') && $('cdAc').classList.remove('show');
-  async function cdSearch(q) { const r = await fetch(SB_URL + '/rest/v1/rpc/member_lookup', { method: 'POST', headers: { apikey: ANON, Authorization: 'Bearer ' + ANON, 'Content-Type': 'application/json', 'Content-Profile': 'countmein', 'Accept-Profile': 'countmein' }, body: JSON.stringify({ p_q: q }) }); return r.ok ? r.json() : []; }
+  async function cdSearch(q) { const r = await fetch(SB_URL + '/rest/v1/rpc/member_lookup', { method: 'POST', headers: { apikey: ANON, Authorization: 'Bearer ' + ANON, 'Content-Type': 'application/json', 'Content-Profile': 'countmein', 'Accept-Profile': 'countmein' }, body: JSON.stringify({ p_q: q, p_current: true }) }); return r.ok ? r.json() : []; }   /* p_current: only players rostered THIS session (the sub-text promises exactly that) */
   function cdRender() { const box = $('cdAc'); if (!_cdAc.length) { box.innerHTML = '<div class="cd-ac-item" style="cursor:default;color:#6b7280">No matches — try the APA number.</div>'; box.classList.add('show'); return; }
     box.innerHTML = _cdAc.map((p, i) => '<div class="cd-ac-item' + (i === _cdFocus ? ' on' : '') + '" data-i="' + i + '"><div class="cd-ac-name">' + esc(cdName(p)) + '</div><div class="cd-ac-sub">APA #' + esc(p.member_number) + (p.team_name ? ' · ' + esc(p.team_name) : '') + '</div></div>').join('');
     [...box.querySelectorAll('.cd-ac-item[data-i]')].forEach(el => el.addEventListener('mousedown', e => { e.preventDefault(); cdPick(+el.dataset.i); })); box.classList.add('show'); }
