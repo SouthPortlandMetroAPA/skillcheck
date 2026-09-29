@@ -151,7 +151,7 @@
     back.innerHTML = '<div class="note"><h2 id="noteTitle">Before you start</h2>'
       + '<p><b>Hot nights happen.</b> Levels come from the scoresheets; your eyes at the table help us get them right.</p>'
       + '<p><b>Tell us what you saw.</b> Shots, safeties, innings. Not just the score.</p>'
-      + '<p><b>We read every one.</b> Kept private, checked against the record, and you\'ll hear back either way.</p>'
+      + '<p><b>We read every one.</b> Kept private and checked against the record. If the level moves, it shows on the next scoresheet.</p>'
       + '<button class="btn" id="gotit">Got it</button></div>';
     document.body.appendChild(back);
     $('gotit').onclick = () => { S.acked = true; back.remove(); S.about === 'self' ? showSelf() : showPick(); };
@@ -224,7 +224,7 @@
       + row('Team', S.cluster ? esc(S.cluster.label) + (S.cluster.night ? ' · ' + esc(S.cluster.night) : '') : '')
       + row('Format', fmt)
       + row('Levels', claimed && proposed ? 'SL' + esc(claimed) + ' → SL' + esc(proposed) : (claimed ? 'now SL' + esc(claimed) : ''))
-      + '</dl><p class="spm-rail-note"><b>Tell us what you saw.</b> Shots, safeties, innings — not just the score. Kept private; you\'ll hear back either way.</p></div>';
+      + '</dl><p class="spm-rail-note"><b>Tell us what you saw.</b> Shots, safeties, innings — not just the score. Kept private. If the level moves, it shows on the next scoresheet.</p></div>';
   }
   function sync() {
     renderRail();
@@ -249,7 +249,7 @@
     const err = $('err'); err.textContent = ''; $('submit').disabled = true;
     const r = await gas('sl_submit', { token: S.token, about_self: S.about === 'self', subject: S.subject.member_number, team_number: S.team.team_number, format: S.format, claimed_current_sl: +$('claimed').value, proposed_sl: +$('proposed').value, reasoning: $('why').value.trim(), seen_on: $('seen').value || null, opponent: $('opp').value.trim(), ack: S.acked, hp: $('hp').value, fill_ms: Date.now() - S.opened });
     if (!r.ok) { if (isAuthErr(r.error)) return handleSessionErr(r.error); err.textContent = r.error || 'Something went wrong. Try again.'; sync(); return; }
-    app.innerHTML = '<div style="text-align:center;padding:16px 4px"><div style="font-size:2.4rem">🎯</div><h2 style="margin:6px 0">Got it.</h2><p class="lead">Your request is in. The league office will read it, keep it private, and check it against the record. You\'ll get an email either way.</p><button class="btn ghost" id="home">Done</button></div>';
+    app.innerHTML = '<div style="text-align:center;padding:16px 4px"><div style="font-size:2.4rem">🎯</div><h2 style="margin:6px 0">Got it.</h2><p class="lead">Your request is in. The office reads every one, keeps it private, and checks it against the record. We do not reply one by one. If the level moves, it shows on the next scoresheet.</p><button class="btn ghost" id="home">Done</button></div>';
     $('home').onclick = showHome;
   }
 
